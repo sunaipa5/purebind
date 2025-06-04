@@ -36,8 +36,7 @@ This will generate:
 ```
 mylib/
 ├── wrapper.go
-├── lib.go
-└── go.mod
+└── lib.go
 ```
 
 ---
