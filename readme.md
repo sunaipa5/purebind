@@ -2,7 +2,7 @@
 
 **purebind** is a CLI tool that parses C-style header files and generates pure Go function bindings using [purego](https://github.com/ebitengine/purego).
 
-[see generated example]()
+[see generated example](https://github.com/sunaipa5/purebind/tree/main/_examples/ayatana)
 
 ## Features
 
