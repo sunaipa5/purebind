@@ -14,7 +14,7 @@
 ## Installation
 
 ```bash
-go install github.com/sunaipa5/purebind
+go install github.com/sunaipa5/purebind@latest
 ```
 
 ---
