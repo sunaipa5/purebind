@@ -1,0 +1,23 @@
+{{ define "bindings" }}
+package {{ .PackageName }}
+
+import (
+	"unsafe"
+	"github.com/ebitengine/purego"
+)
+
+var handle uintptr
+
+var (
+{{- range .Functions }}
+	{{ .CFunc }} func({{ .ParamTypes }}) {{ .ReturnType }}
+{{- end }}
+)
+
+func Register(libHandle uintptr) {
+	handle = libHandle
+{{- range .Functions }}
+	purego.RegisterLibFunc(&{{ .CFunc }}, handle, "{{ .CName }}")
+{{- end }}
+}
+{{ end }}

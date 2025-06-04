@@ -1,0 +1,14 @@
+{{ define "bindings" }}
+package {{ .PackageName }}
+
+import "unsafe"
+
+{{- range .Functions }}
+
+func {{ .GOFunc }}({{ .WrapperParams }}) {{ .ReturnType }} {
+return {{ .CFunc }}({{ .ParamNames }})
+}
+
+{{- end }}
+
+{{ end }}
