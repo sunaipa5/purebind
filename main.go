@@ -35,5 +35,10 @@ func main() {
 
 	parseTemplates(data)
 
+	if err := parseStructs(libLocation, data.PackageName); err != nil {
+		werror("Failed to parse structs", err)
+		return
+	}
+
 	fmt.Println("Done.")
 }

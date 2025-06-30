@@ -1,10 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"text/template"
 )
@@ -58,7 +58,7 @@ func parseHeader(filename string) ([]Function, error) {
 				var argType, paramName string
 				if len(parts) == 1 {
 					argType = parts[0]
-					paramName = fmt.Sprintf("p%d", i)
+					paramName = "p" + strconv.Itoa(i)
 				} else {
 					paramName = parts[len(parts)-1]
 					argType = strings.Join(parts[:len(parts)-1], " ")
