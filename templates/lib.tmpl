@@ -14,7 +14,7 @@ var (
 {{- end }}
 )
 
-func Register(libHandle uintptr) {
+func register(libHandle uintptr) {
 	handle = libHandle
 {{- range .Functions }}
 	purego.RegisterLibFunc(&{{ .CFunc }}, handle, "{{ .CName }}")

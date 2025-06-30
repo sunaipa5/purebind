@@ -1,0 +1,16 @@
+{{ define "bindings" }}
+//go:build linux
+
+package {{ .PackageName }}
+
+import "github.com/ebitengine/purego"
+
+func init() {
+	lib, err := purego.Dlopen("{{ .PackageName }}.so", purego.RTLD_NOW|purego.RTLD_GLOBAL)
+	if err != nil {
+		panic(err)
+	}
+
+	register(lib)
+}
+{{ end }}

@@ -4,8 +4,6 @@ import (
 	"embed"
 	"fmt"
 	"os"
-	"path"
-	"text/template"
 )
 
 //go:embed templates/*.tmpl
@@ -35,47 +33,7 @@ func main() {
 		Functions:   funcs,
 	}
 
-	//Lib.tmpl
-	tmpl, err := template.ParseFS(templatesFS, "templates/lib.tmpl")
-	if err != nil {
-		werror("Failed to parse lib template", err)
-		return
-	}
-	err = os.MkdirAll(data.PackageName, 0755)
-	if err != nil {
-		werror("Failed to create directory", err)
-		return
-	}
-
-	outFile, err := os.Create(path.Join(data.PackageName, "lib.go"))
-	if err != nil {
-		werror("Failed to create lib file", err)
-		return
-	}
-	err = tmpl.ExecuteTemplate(outFile, "bindings", data)
-	if err != nil {
-		werror("Failed to execute lib template", err)
-		return
-	}
-	outFile.Close()
-
-	//Wrapper.t
-	wrapperTmpl, err := template.ParseFS(templatesFS, "templates/wrapper.tmpl")
-	if err != nil {
-		werror("Failed to parse wrapper template", err)
-		return
-	}
-	wrapperFile, err := os.Create(path.Join(data.PackageName, "wrapper.go"))
-	if err != nil {
-		werror("Failed to create wrapper file", err)
-		return
-	}
-	err = wrapperTmpl.ExecuteTemplate(wrapperFile, "bindings", data)
-	if err != nil {
-		werror("Failed to execute wrapper template", err)
-		return
-	}
-	wrapperFile.Close()
+	parseTemplates(data)
 
 	fmt.Println("Done.")
 }

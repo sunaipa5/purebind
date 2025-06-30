@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
+	"path"
 	"regexp"
 	"strings"
+	"text/template"
 )
 
 type Param struct {
@@ -69,12 +71,6 @@ func parseHeader(filename string) ([]Function, error) {
 
 		}
 
-		//Group parameters by data type
-		groupedParams := make(map[string][]string)
-		for _, p := range params {
-			groupedParams[p.Type] = append(groupedParams[p.Type], p.Name)
-		}
-
 		// Binding function parameters - definition (types)
 		var funcParamTypes []string
 		for _, p := range params {
@@ -83,14 +79,14 @@ func parseHeader(filename string) ([]Function, error) {
 
 		// Binding function parameters - usage (names)
 		var funcParamNames []string
-		for _, names := range groupedParams {
-			funcParamNames = append(funcParamNames, strings.Join(names, ", "))
+		for _, p := range params {
+			funcParamNames = append(funcParamNames, p.Name)
 		}
 
-		//Wrapper function parameters
+		// Wrapper function parameters
 		var wrapperParams []string
-		for typ, names := range groupedParams {
-			wrapperParams = append(wrapperParams, strings.Join(names, ", ")+" "+typ)
+		for _, p := range params {
+			wrapperParams = append(wrapperParams, p.Name+" "+p.Type)
 		}
 
 		funcs = append(funcs, Function{
@@ -105,4 +101,105 @@ func parseHeader(filename string) ([]Function, error) {
 	}
 
 	return funcs, nil
+}
+
+func parseTemplates(data TemplateData) {
+	//Lib.tmpl
+	tmpl, err := template.ParseFS(templatesFS, "templates/lib.tmpl")
+	if err != nil {
+		werror("Failed to parse lib template", err)
+		return
+	}
+	err = os.MkdirAll(data.PackageName, 0755)
+	if err != nil {
+		werror("Failed to create directory", err)
+		return
+	}
+
+	outFile, err := os.Create(path.Join(data.PackageName, "lib.go"))
+	if err != nil {
+		werror("Failed to create lib file", err)
+		return
+	}
+	err = tmpl.ExecuteTemplate(outFile, "bindings", data)
+	if err != nil {
+		werror("Failed to execute lib template", err)
+		return
+	}
+	outFile.Close()
+
+	//Wrapper.tmpl
+	wrapperTmpl, err := template.ParseFS(templatesFS, "templates/wrapper.tmpl")
+	if err != nil {
+		werror("Failed to parse wrapper template", err)
+		return
+	}
+	wrapperFile, err := os.Create(path.Join(data.PackageName, "wrapper.go"))
+	if err != nil {
+		werror("Failed to create wrapper file", err)
+		return
+	}
+	err = wrapperTmpl.ExecuteTemplate(wrapperFile, "bindings", data)
+	if err != nil {
+		werror("Failed to execute wrapper template", err)
+		return
+	}
+	wrapperFile.Close()
+
+	//linux.tmpl
+	linuxTmpl, err := template.ParseFS(templatesFS, "templates/linux.tmpl")
+	if err != nil {
+		werror("Failed to parse wrapper template", err)
+		return
+	}
+
+	linuxFile, err := os.Create(path.Join(data.PackageName, "linux.go"))
+	if err != nil {
+		werror("Failed to create wrapper file", err)
+		return
+	}
+	err = linuxTmpl.ExecuteTemplate(linuxFile, "bindings", data)
+	if err != nil {
+		werror("Failed to execute wrapper template", err)
+		return
+	}
+	linuxFile.Close()
+
+	//windows.tmpl
+	windowsTmpl, err := template.ParseFS(templatesFS, "templates/windows.tmpl")
+	if err != nil {
+		werror("Failed to parse wrapper template", err)
+		return
+	}
+
+	windowsFile, err := os.Create(path.Join(data.PackageName, "windows.go"))
+	if err != nil {
+		werror("Failed to create wrapper file", err)
+		return
+	}
+	err = windowsTmpl.ExecuteTemplate(windowsFile, "bindings", data)
+	if err != nil {
+		werror("Failed to execute wrapper template", err)
+		return
+	}
+	windowsFile.Close()
+
+	//darwin.tmpl
+	darwinTmpl, err := template.ParseFS(templatesFS, "templates/darwin.tmpl")
+	if err != nil {
+		werror("Failed to parse wrapper template", err)
+		return
+	}
+
+	darwinFile, err := os.Create(path.Join(data.PackageName, "darwin.go"))
+	if err != nil {
+		werror("Failed to create wrapper file", err)
+		return
+	}
+	err = darwinTmpl.ExecuteTemplate(darwinFile, "bindings", data)
+	if err != nil {
+		werror("Failed to execute wrapper template", err)
+		return
+	}
+	darwinFile.Close()
 }
