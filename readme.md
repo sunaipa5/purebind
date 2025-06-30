@@ -35,8 +35,12 @@ This will generate:
 
 ```
 mylib/
-├── wrapper.go
-└── lib.go
+├── darwin.go
+├── lib.go
+├── linux.go
+├── structs.go
+├── windows.go
+└── wrapper.go
 ```
 
 ---
