@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 func generateParam(cType string) string {
@@ -21,8 +22,9 @@ func generateParam(cType string) string {
 	return cType
 }
 
-func generateGoType(cType string) string {
+func generateGoType(cType string, isReturn bool) string {
 	cType = strings.TrimSpace(cType)
+
 	switch cType {
 	case "int":
 		return "int32"
@@ -31,14 +33,30 @@ func generateGoType(cType string) string {
 	case "double":
 		return "float64"
 	case "void", "void*":
-		return "unsafe.Pointer"
-	case "const char*", "char*":
-		return "unsafe.Pointer"
-	default:
-		if strings.HasSuffix(cType, "*") {
+		if isReturn {
+			return ""
+		} else {
 			return "unsafe.Pointer"
 		}
-		return "unsafe.Pointer"
+	case "const char*", "char*":
+		if isReturn {
+			return "uintptr"
+		} else {
+			return "unsafe.Pointer"
+		}
+	default:
+		if strings.HasSuffix(cType, "*") {
+			if isReturn {
+				return "uintptr"
+			} else {
+				return "unsafe.Pointer"
+			}
+		}
+		if isReturn {
+			return ""
+		} else {
+			return "unsafe.Pointer"
+		}
 	}
 }
 
@@ -50,10 +68,13 @@ func generateBindingFunc(name string) string {
 		}
 	}
 	out := sb.String()
-	if out == "" || !unicode.IsLetter(rune(out[0])) {
-		out = "Func" + out
+
+	if out == "" {
+		return "Unknown"
 	}
-	return out
+
+	r, size := utf8.DecodeRuneInString(out)
+	return string(unicode.ToLower(r)) + out[size:]
 }
 
 func generateWrapperFunc(s string) string {

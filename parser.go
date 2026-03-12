@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"regexp"
@@ -65,7 +66,7 @@ func parseHeader(filename string) ([]Function, error) {
 				}
 				params = append(params, Param{
 					Name: generateParam(paramName),
-					Type: generateGoType(argType),
+					Type: generateGoType(argType, false),
 				})
 			}
 
@@ -89,6 +90,9 @@ func parseHeader(filename string) ([]Function, error) {
 			wrapperParams = append(wrapperParams, p.Name+" "+p.Type)
 		}
 
+		goRetType := generateGoType(retType, true)
+		fmt.Println(goRetType)
+
 		funcs = append(funcs, Function{
 			CName:         name,
 			CFunc:         generateBindingFunc(name),
@@ -96,7 +100,7 @@ func parseHeader(filename string) ([]Function, error) {
 			ParamTypes:    strings.Join(funcParamTypes, ","),
 			ParamNames:    strings.Join(funcParamNames, ","),
 			WrapperParams: strings.Join(wrapperParams, ", "),
-			ReturnType:    generateGoType(retType),
+			ReturnType:    goRetType,
 		})
 	}
 

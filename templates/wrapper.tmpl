@@ -5,8 +5,8 @@ import "unsafe"
 
 {{- range .Functions }}
 
-func {{ .GOFunc }}({{ .WrapperParams }}) {{ .ReturnType }} {
-return {{ .CFunc }}({{ .ParamNames }})
+func {{.GOFunc}}({{.WrapperParams}}){{if .ReturnType}} {{.ReturnType}}{{end}} {
+	{{if .ReturnType}}return {{end}}{{.CFunc}}({{.ParamNames}})
 }
 
 {{- end }}

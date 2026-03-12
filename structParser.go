@@ -4,6 +4,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -18,14 +19,21 @@ var knownCTypes = map[string]string{
 	"char":           "byte",
 	"signed char":    "int8",
 	"unsigned char":  "byte",
-	"const char":     "string",
+	"const char":     "uintptr",
 	"float":          "float32",
 	"double":         "float64",
-	"void":           "any",
-	"size_t":         "unsafe.Pointer",
+	"void":           "byte",
+	"size_t":         "uintptr",
 	"int64_t":        "int64",
 	"uint8_t":        "uint8",
-	// Gerekirse ekle
+}
+
+var goReservedWords = map[string]bool{
+	"break": true, "default": true, "func": true, "interface": true, "select": true,
+	"case": true, "defer": true, "go": true, "map": true, "struct": true,
+	"chan": true, "else": true, "goto": true, "package": true, "switch": true,
+	"const": true, "fallthrough": true, "if": true, "range": true, "type": true,
+	"continue": true, "for": true, "import": true, "return": true, "var": true,
 }
 
 func convertCTypeToGo(cType string) string {
@@ -36,7 +44,6 @@ func convertCTypeToGo(cType string) string {
 		return convertFuncPointerToGo(matches[1], matches[3])
 	}
 
-	// Pointer sayısını hesapla (sadece sondaki * leri sayar)
 	pointerCount := 0
 	for strings.HasSuffix(cType, "*") {
 		pointerCount++
@@ -79,11 +86,8 @@ func convertFuncPointerToGo(returnType, params string) string {
 	if paramList == "void" || paramList == "" {
 		paramList = ""
 	} else {
-		// Parametreleri parçala virgülden
 		paramsSplit := splitParams(paramList)
 		for i, p := range paramsSplit {
-			// Parametre tipi olarak sadece tip yazıyoruz (isimler opsiyonel)
-			// Basitçe ilk kelimeleri alabiliriz
 			parts := strings.Fields(p)
 			if len(parts) == 0 {
 				continue
@@ -96,11 +100,10 @@ func convertFuncPointerToGo(returnType, params string) string {
 	return "func(" + paramList + ") " + goReturnType
 }
 
-// Basitçe fonksiyon parametrelerini virgüle göre ayırır, parantez ve pointerleri göz ardı eder
 func splitParams(params string) []string {
 	var result []string
 	current := strings.Builder{}
-	level := 0 // parantez seviyesi
+	level := 0
 	for _, r := range params {
 		switch r {
 		case '(':
@@ -130,16 +133,30 @@ func exportName(name string) string {
 	if name == "" {
 		return ""
 	}
-	runes := []rune(name)
+
+	tempName := name
+	if goReservedWords[name] {
+		tempName = name + "Field"
+	}
+
+	runes := []rune(tempName)
 	runes[0] = unicode.ToUpper(runes[0])
-	return string(runes)
+	exported := string(runes)
+
+	switch exported {
+	case "Int", "String", "Float", "Bool", "Byte", "Uintptr":
+		return exported + "_"
+	}
+
+	return exported
 }
 
 func extractFields(structBody string) string {
 	lines := strings.Split(structBody, "\n")
 	var sb strings.Builder
 
-	fieldRegex := regexp.MustCompile(`^(?:/\*\*([^*]*?)\*/)?\s*(.+?)\s+(\w+)\s*;`)
+	fieldRegex := regexp.MustCompile(`^(?:/\*\*([^*]*?)\*/)?\s*(.+?[\s\*]+)(\w+)((?:\[\d+\])+)?\s*;`)
+	funcPtrRegex := regexp.MustCompile(`^(?:/\*\*([^*]*?)\*/)?\s*(.+?)\s*\(\s*\*\s*(\w+)((?:\[\d+\])+)?\s*\)\s*\((.*)\)\s*;`)
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -147,29 +164,43 @@ func extractFields(structBody string) string {
 			continue
 		}
 
-		matches := fieldRegex.FindStringSubmatch(line)
-		if matches == nil {
+		if matches := fieldRegex.FindStringSubmatch(line); matches != nil {
+			comment := strings.TrimSpace(matches[1])
+			cType := strings.TrimSpace(matches[2])
+			name := matches[3]
+			arrayPart := matches[4]
+
+			goType := convertCTypeToGo(cType)
+			if arrayPart != "" {
+				goType = arrayPart + goType
+			}
+
+			writeField(&sb, comment, name, goType)
 			continue
 		}
-		comment := strings.TrimSpace(matches[1])
-		cType := matches[2]
-		name := matches[3]
 
-		goType := convertCTypeToGo(cType)
-		if comment != "" {
-			sb.WriteString("\t// ")
-			sb.WriteString(comment)
-			sb.WriteByte('\n')
+		if matches := funcPtrRegex.FindStringSubmatch(line); matches != nil {
+			comment := strings.TrimSpace(matches[1])
+			name := matches[3]
+			arrayPart := matches[4]
+
+			goType := "uintptr"
+			if arrayPart != "" {
+				goType = arrayPart + goType
+			}
+
+			writeField(&sb, comment, name, goType)
+			continue
 		}
-
-		sb.WriteByte('\t')
-		sb.WriteString(exportName(name))
-		sb.WriteByte(' ')
-		sb.WriteString(goType)
-		sb.WriteByte('\n')
 	}
-
 	return sb.String()
+}
+
+func writeField(sb *strings.Builder, comment, name, goType string) {
+	if comment != "" {
+		sb.WriteString("\t// " + comment + "\n")
+	}
+	sb.WriteString("\t" + exportName(name) + " " + goType + "\n")
 }
 
 func convertStruct(body string, name string) string {
@@ -177,7 +208,15 @@ func convertStruct(body string, name string) string {
 	sb.WriteString("type ")
 	sb.WriteString(name)
 	sb.WriteString(" struct {\n")
-	sb.WriteString(extractFields(body))
+
+	fields := extractFields(body)
+
+	if fields == "" {
+		sb.WriteString("\t_ uintptr // Padding for empty C struct\n")
+	} else {
+		sb.WriteString(fields)
+	}
+
 	sb.WriteString("}\n")
 	return sb.String()
 }
@@ -189,28 +228,87 @@ func parseStructs(libLocation, packageName string) error {
 	}
 	content := string(contentBytes)
 
-	re := regexp.MustCompile(`typedef\s+struct\s*(\w*)\s*\{([^}]*)\}\s*(\w+);`)
-
-	matches := re.FindAllStringSubmatch(content, -1)
-	if len(matches) == 0 {
-		return nil
-	}
-
 	var sb strings.Builder
-	sb.WriteString("package ")
-	sb.WriteString(packageName)
-	sb.WriteString("\n\nimport \"unsafe\"\n\n")
+	sb.WriteString("package " + packageName + "\n\n")
 
-	for _, m := range matches {
-		body := m[2]
-		name := m[3]
-		sb.WriteString(convertStruct(body, name))
-		sb.WriteByte('\n')
+	// ------------- ENUMS START -------------
+	reEnum := regexp.MustCompile(`(?s)typedef\s+enum\s*\{([^}]*)\}\s*(\w+);`)
+	reEnumItem := regexp.MustCompile(`^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:=\s*([^,//\s]+))?`)
+	for _, m := range reEnum.FindAllStringSubmatch(content, -1) {
+		if len(m) < 3 {
+			continue
+		}
+		body, enumName := m[1], m[2]
+
+		var enumBody strings.Builder
+		lastValue := -1
+		hasValidMember := false
+
+		lines := strings.Split(body, "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "//") || strings.HasPrefix(line, "/*") {
+				continue
+			}
+
+			match := reEnumItem.FindStringSubmatch(line)
+			if match == nil {
+				continue
+			}
+
+			name := match[1]
+			valPart := match[2]
+
+			if name == "false" || name == "true" || name == "type" || name == "func" {
+				continue
+			}
+
+			hasValidMember = true
+
+			if valPart != "" {
+				valPart = strings.Trim(valPart, ";,")
+				enumBody.WriteString("\t" + name + " = " + valPart + "\n")
+
+				if i, err := strconv.ParseInt(valPart, 0, 64); err == nil {
+					lastValue = int(i)
+				}
+			} else {
+				lastValue++
+				enumBody.WriteString("\t" + name + " = " + strconv.Itoa(lastValue) + "\n")
+			}
+		}
+
+		if hasValidMember {
+			sb.WriteString("// " + enumName + "\nconst (\n")
+			sb.WriteString(enumBody.String())
+			sb.WriteString(")\n\n")
+		}
 	}
 
-	outputPath := path.Join(packageName, "structs.go")
-	if err := os.MkdirAll(packageName, 0755); err != nil {
-		return err
+	//------------- Alias -------------
+	reAlias := regexp.MustCompile(`(?m)^\s*typedef\s+([\w\s\*]+)\s+(\w+);`)
+	for _, m := range reAlias.FindAllStringSubmatch(content, -1) {
+		if len(m) < 3 {
+			continue
+		}
+		fullOldType := strings.TrimSpace(m[1])
+		newName := strings.TrimSpace(m[2])
+		if strings.HasPrefix(fullOldType, "struct") || strings.HasPrefix(fullOldType, "enum") {
+			continue
+		}
+
+		sb.WriteString("type " + newName + " = " + convertCTypeToGo(fullOldType) + "\n")
 	}
-	return os.WriteFile(outputPath, []byte(sb.String()), 0644)
+	sb.WriteString("\n")
+
+	//------------- Structs -------------
+	reStruct := regexp.MustCompile(`(?s)typedef\s+struct\s*\w*\s*\{([^}]*)\}\s*(\w+);`)
+	for _, m := range reStruct.FindAllStringSubmatch(content, -1) {
+		if len(m) < 3 {
+			continue
+		}
+		sb.WriteString(convertStruct(m[1], m[2]) + "\n")
+	}
+
+	return os.WriteFile(path.Join(packageName, "structs.go"), []byte(sb.String()), 0644)
 }
